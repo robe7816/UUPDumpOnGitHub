@@ -1,0 +1,65 @@
+name: Builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      uupdlurl:
+        required: true
+        type: string
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  build:
+    defaults:
+      run:
+        shell: cmd
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Importing Files
+        run: |
+          mkdir win
+          cd win
+          curl -L -o uup.zip "${{ inputs.uupdlurl }}"
+          tar -xf uup.zip
+          echo f | xcopy /f /y .\files\converter_multi ..\files\converter_multi
+          echo f | xcopy /f /y .\files\converter_windows ..\files\converter_windows
+          echo f | xcopy /f /y ConvertConfig.ini ..\ConvertConfig.ini
+          echo f | xcopy /f /y CustomAppsList.txt ..\CustomAppsList.txt
+          echo f | xcopy /f /y uup_download_windows.cmd ..\start.cmd
+          cd ..
+
+      - name: Building Windows Image
+        run: ./start.cmd
+
+      - name: Checking Directories
+        run: |
+          ren *.ISO Windows.iso
+
+      - name: Upload to Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WindowsISO.zip
+          path: ./Windows.iso
+          compression-level: 0
+          retention-days: 1
+
+  upload:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download from Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: WindowsISO.zip
+          path: ./
+      - uses: Mattraks/delete-workflow-runs@v2
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          retain_days: 0
+          keep_minimum_runs: 0
